@@ -187,27 +187,8 @@ private:
 	void			write_reg16(uint8_t reg, uint16_t value);
 
 	// ADIS16477 onboard self test
-	bool 			self_test();
-
-	/*
-	  set low pass filter frequency
-	 */
-	void _set_dlpf_filter(uint16_t frequency_hz);
-
-	/*
-	  set IMU to factory default
-	 */
-	void _set_factory_default();
-
-	/*
-	  set sample rate (approximate) - 1kHz to 5Hz
-	*/
-	void _set_sample_rate(uint16_t desired_sample_rate_hz);
-
-	/*
-	  set the gyroscope dynamic range
-	*/
-	void _set_gyro_dyn_range(uint16_t desired_gyro_dyn_range);
+	bool 			self_test_memory();
+	bool 			self_test_sensor();
 
 	ADIS16477(const ADIS16477 &);
 	ADIS16477 operator=(const ADIS16477 &);

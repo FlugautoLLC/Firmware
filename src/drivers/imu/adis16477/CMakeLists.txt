@@ -35,6 +35,7 @@ px4_add_module(
 	MAIN adis16477
 	STACK_MAIN 1200
 	COMPILE_FLAGS
+		-DDEBUG_BUILD
 	SRCS
 		ADIS16477.cpp
 		ADIS16477_gyro.cpp

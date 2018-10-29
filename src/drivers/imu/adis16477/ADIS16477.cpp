@@ -84,6 +84,9 @@ ADIS16477::ADIS16477(int bus, const char *path_accel, const char *path_gyro, uin
 	_bad_transfers(perf_alloc(PC_COUNT, "adis16477_bad_transfers")),
 	_rotation(rotation)
 {
+
+	_debug_enabled = true;
+
 #ifdef GPIO_SPI1_RESET_ADIS16477
 	// ADIS16477 configure reset
 	px4_arch_configgpio(GPIO_SPI1_RESET_ADIS16477);
@@ -241,6 +244,12 @@ int ADIS16477::reset()
 	// Reset Recovery Time
 	up_mdelay(193);
 
+	// Factory Calibration Restore (global command bit 1)
+	uint8_t value[2] = {};
+	value[0] = (1 << 1);
+	write_reg16(GLOB_CMD, (uint16_t)value[0]);
+	up_mdelay(142); // Factory Calibration Restore Time
+
 	// configure digital filter, 16 taps
 	write_reg16(FILT_CTRL, 0x04);
 
@@ -264,7 +273,7 @@ ADIS16477::probe()
 		if (_product == PROD_ID_ADIS16477) {
 			DEVICE_DEBUG("PRODUCT: %X", _product);
 
-			if (self_test()) {
+			if (self_test_memory() && self_test_sensor()) {
 				return PX4_OK;
 
 			} else {
@@ -281,53 +290,44 @@ ADIS16477::probe()
 	return -EIO;
 }
 
-/* set sample rate for both accel and gyro */
-void
-ADIS16477::_set_sample_rate(uint16_t desired_sample_rate_hz)
-{
-
-}
-
-/* set the DLPF FIR filter tap. This affects both accelerometer and gyroscope. */
-void
-ADIS16477::_set_dlpf_filter(uint16_t desired_filter_tap)
-{
-	//modify_reg16(ADIS16477_SENS_AVG, 0x0007, desired_filter_tap);
-
-	/* Verify data write on the IMU */
-
-	//if ((read_reg16(ADIS16477_SENS_AVG) & 0x0007) != desired_filter_tap) {
-	//	DEVICE_DEBUG("failed to set IMU filter");
-	//}
-}
-
-/* set IMU to factory defaults. */
-void
-ADIS16477::_set_factory_default()
-{
-	//write_reg16(ADIS16477_GLOB_CMD, 0x02);
-}
-
-/* set the gyroscope dynamic range */
-void
-ADIS16477::_set_gyro_dyn_range(uint16_t desired_gyro_dyn_range)
-{
-}
-
 bool
-ADIS16477::self_test()
+ADIS16477::self_test_memory()
 {
-	DEVICE_DEBUG("self test");
+	DEVICE_DEBUG("self test memory");
 
-	// self test (global command bit 2)
+	// self test (global command bit 4)
 	uint8_t value[2] = {};
-	value[0] = (1 << 2);
+	value[0] = (1 << 4);
 	write_reg16(GLOB_CMD, (uint16_t)value[0]);
+	up_mdelay(32); // Flash Memory Test Time
 
 	// read DIAG_STAT to check result
 	uint16_t diag_stat = read_reg16(DIAG_STAT);
 
 	if (diag_stat != 0) {
+		PX4_ERR("DIAG_STAT: %X", diag_stat);
+		return false;
+	}
+
+	return true;
+}
+
+bool
+ADIS16477::self_test_sensor()
+{
+	DEVICE_DEBUG("self test sensor");
+
+	// self test (global command bit 2)
+	uint8_t value[2] = {};
+	value[0] = (1 << 2);
+	write_reg16(GLOB_CMD, (uint16_t)value[0]);
+	up_mdelay(14); // Self Test Time
+
+	// read DIAG_STAT to check result
+	uint16_t diag_stat = read_reg16(DIAG_STAT);
+
+	if (diag_stat != 0) {
+		PX4_ERR("DIAG_STAT: %X", diag_stat);
 		return false;
 	}
 
@@ -414,7 +414,6 @@ ADIS16477::ioctl(struct file *filp, int cmd, unsigned long arg)
 		return _sample_rate;
 
 	case ACCELIOCSSAMPLERATE:
-		_set_sample_rate(arg);
 		return OK;
 
 	case ACCELIOCSSCALE: {
@@ -463,7 +462,6 @@ ADIS16477::gyro_ioctl(struct file *filp, int cmd, unsigned long arg)
 		return _sample_rate;
 
 	case GYROIOCSSAMPLERATE:
-		_set_sample_rate(arg);
 		return OK;
 
 	case GYROIOCSSCALE:
@@ -477,7 +475,6 @@ ADIS16477::gyro_ioctl(struct file *filp, int cmd, unsigned long arg)
 		return OK;
 
 	case GYROIOCSRANGE:
-		_set_gyro_dyn_range(arg);
 		return OK;
 
 	case GYROIOCGRANGE:
